@@ -7,11 +7,8 @@
 订阅流表（种子来源）：订阅名称（唯一约束），更新频率，订阅类型（rss/mikan），订阅连接，添加时间，最后更新时间，状态（活跃，禁用，失效）。
 
 ``` sql
-create sequence feed_stream_id;
-
-create table feed_stream 
+create table stream 
 (
-    int stream_id,
     name varchar,
     stream_type varchar,
     url text,
@@ -19,41 +16,36 @@ create table feed_stream
     cron varchar,
     last_time date,
     primary key(name)
-)
+);
 ```
 
 订阅表（本地的全量种子列表）：订阅ID，种子名称，种子唯一标识（torrent的下载地址，或者魔力连接的md5），种子连接，种子新增时间。（订阅ID+种子唯一标识为表唯一约束）
 
 ``` sql
-create sequence feed_id;
 
-create table feed
+create table torrent
 (
-    int feed_id,
-    name varchar,
-    feed_md5 varchar,
+    feed_id varchar,
+    title varchar,
     url text,
     status varchar,
     add_time date,
-    stream_id int,
-    primary key(feed_id),
-    unique key(stream_id,feed_md5)
+    stream varchar,
+    tags varchar,
+    primary key(stream,feed_id)
 )
 ```
 
 老番规则表（老番合集匹配）：规则名称，文件夹名称匹配表达式，文件名称匹配表达式
 
 ``` sql
-create sequence reg_id;
 
 create table reg_sub
 (
-    int reg_id,
     name varchar,
     dir_reg varchar,
-    filename_reg varchar
-    primary key(reg_id),
-    unique key(name)
+    filename_reg varchar,
+    primary key(name)
 )
 ```
 
@@ -64,35 +56,31 @@ create sequence bangumi_sub_id;
 
 create table bangumi_sub
 (
-    int bangumi_sub_id,
+    id int,
     name varchar,
-    stream_id int,
+    season varchar,
+    stream varchar,
     filename_reg varchar,
     status varchar,
     last_time date,
     cron varchar,
     download varchar,
     archive varchar,
-    rename_type varchar
-    primary key(reg_id),
-    unique key(name)
+    rename_type varchar,
+    primary key(id),
+    unique(name,season,stream,filename_reg)
 )
 ```
 
 订阅下载表：番名称，连接地址，名称，季，当前集名称，状态。
 
 ``` sql
-create sequence bangumi_id;
-
 create table bangumi
 (
-    bangumi_id int,
     name varchar,
     season varchar,
     status varchar,
-    last_bangumi varchar,
-    primary key(bangumi_id),
-    unique key(varchar)
+    primary key(name,season)
 )
 ```
 
