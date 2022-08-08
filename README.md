@@ -13,7 +13,7 @@
 config文件中，配置代理，qbittorrent连接参数，番剧列表配置（预制为作者自己的追番表）。
 
 之所以使用编程文件而非配置文件作为配置，主要目的是方便更灵活的控制。
-
+```python
 {
     'name':"莉可丽丝",
     'rss_link':rss_prefix+"keyword=Lycoris+Recoi&sort_id=0&team_id=803&order=date-desc",
@@ -23,8 +23,8 @@ config文件中，配置代理，qbittorrent连接参数，番剧列表配置（
     'season':None,
     'link_patten':"Lilith.*Lycoris Recoil - ([\d]+) \[Baha\].*mp4",
     'link_path':"/data7/Auto_Bangumi/links"
-},
-
+}
+```
 name：番剧名称，也是刮削的目标名称，需要在tmdb，tvdb等预期的元数据库中可以查到。
 rss_link:大马哈鱼（dmhy）的rss订阅连接，虽然下方有rss_patten作为过滤条件，但还是推荐在rss_link中就预设好条件，这样处理也方便。
 rss_patten：对于种子名称进行二次过滤，避免rss的搜索条件覆盖不到的一些场景，此处为正则表达式。
@@ -54,7 +54,7 @@ python /data7/Auto_Bangumi/renamer.py '女武神驱动 美人鱼' 01 '-MERMAID- 
 # 运行效果
 
 作为cron跑两周的效果如下：
-
+```bash
 tree -N /data7/Auto_Bangumi/links
 
 /data7/Auto_Bangumi/links
@@ -118,4 +118,4 @@ tree -N /data7/Auto_Bangumi/links
 │       ├── 影宅 S02E03.mkv
 │       ├── 影宅 S02E04.mkv
 │       └── 影宅 S02E05.mkv
-
+```
