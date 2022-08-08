@@ -2,129 +2,120 @@
 
 目标是写个重随时追番体验的自动番组下载工具。
 
-# 主要数据表设计
+受到项目AutoBangumi(https://github.com/EstrellaXD/Auto_Bangumi)的启发。
 
-订阅流表（种子来源）：订阅名称（唯一约束），更新频率，订阅类型（rss/mikan），订阅连接，添加时间，最后更新时间，状态（活跃，禁用，失效）。
+在其设计思想基础上，进行简化，单纯做种子追踪+刮削重命名。
 
-``` sql
-create table stream 
-(
-    name varchar,
-    stream_type varchar,
-    url text,
-    status varchar,
-    cron varchar,
-    last_time date,
-    primary key(name)
-);
-```
+其中重命名部分采用linux硬连接而非直接rename，一来避免qbittorrent识别不到已经下载的番剧，二来也方便万一刮削错误可以重置。
 
-订阅表（本地的全量种子列表）：订阅ID，种子名称，种子唯一标识（torrent的下载地址，或者魔力连接的md5），种子连接，种子新增时间。（订阅ID+种子唯一标识为表唯一约束）
+# 主要逻辑
 
-``` sql
+config文件中，配置代理，qbittorrent连接参数，番剧列表配置（预制为作者自己的追番表）。
 
-create table torrent
-(
-    feed_id varchar,
-    title varchar,
-    url text,
-    status varchar,
-    add_time date,
-    stream varchar,
-    tags varchar,
-    primary key(stream,feed_id)
-)
-```
+之所以使用编程文件而非配置文件作为配置，主要目的是方便更灵活的控制。
 
-老番规则表（老番合集匹配）：规则名称，文件夹名称匹配表达式，文件名称匹配表达式
+{
+    'name':"莉可丽丝",
+    'rss_link':rss_prefix+"keyword=Lycoris+Recoi&sort_id=0&team_id=803&order=date-desc",
+    'rss_patten':'CHT',
+    'torrent_path':'/data7/Auto_Bangumi/torrents',
+    'download_path':'/data7/Auto_Bangumi/downloads',
+    'season':None,
+    'link_patten':"Lilith.*Lycoris Recoil - ([\d]+) \[Baha\].*mp4",
+    'link_path':"/data7/Auto_Bangumi/links"
+},
 
-``` sql
+name：番剧名称，也是刮削的目标名称，需要在tmdb，tvdb等预期的元数据库中可以查到。
+rss_link:大马哈鱼（dmhy）的rss订阅连接，虽然下方有rss_patten作为过滤条件，但还是推荐在rss_link中就预设好条件，这样处理也方便。
+rss_patten：对于种子名称进行二次过滤，避免rss的搜索条件覆盖不到的一些场景，此处为正则表达式。
+torrent_path：暂时废弃字段，早期设定为独立于下载器的torrent目录（这种方式可以兼容于几乎所有bt下载器），但因为从maglink获取种子有些麻烦，因此废弃，而采用直接调用qbittorrent的方式。
+download_path：下载路径，仅用于刮削，应该配置为qb的默认下载目录。
+season：第几季，用于刮削时候season的设定，如果为空默认为第一季。
+link_patten：用于刮削时候获取第几集，其中()用于提取对应集的数字。这个表达式会作用于所有下载目录下的文件，建议写作时候区分度大些，避免识别错误。
+link_path：硬连接的目标位置。
 
-create table reg_sub
-(
-    name varchar,
-    dir_reg varchar,
-    filename_reg varchar,
-    primary key(name)
-)
-```
+# 新番下载
 
-新番订阅表（新番订阅）：番名称，订阅流，规则匹配表达式，状态（活跃，禁用，失效），最后完成下载时间，刷新周期，下载路径，刮削路径，重命名方式。
+在上述配置完成，并且依赖安装完整的情况下，增加crontab：
 
-``` sql
-create sequence bangumi_sub_id;
+0 * * * * /data7/Auto_Bangumi/app/venv/bin/python /data7/Auto_Bangumi/app/yaab/app.py 2>&1 >> /data7/Auto_Bangumi/app/app.log
+# 完结番剧重命名
 
-create table bangumi_sub
-(
-    id int,
-    name varchar,
-    season varchar,
-    stream varchar,
-    filename_reg varchar,
-    status varchar,
-    last_time date,
-    cron varchar,
-    download varchar,
-    archive varchar,
-    rename_type varchar,
-    primary key(id),
-    unique(name,season,stream,filename_reg)
-)
-```
+renamer.py
 
-订阅下载表：番名称，连接地址，名称，季，当前集名称，状态。
+主要用于番剧重命名：
 
-``` sql
-create table bangumi
-(
-    name varchar,
-    season varchar,
-    status varchar,
-    primary key(name,season)
-)
-```
+renamer.py {番剧刮削名称} {季} {集获取正则表达式} {原始文件目录} {硬连接目录}
 
-# 主要配置
+example：
 
-刮削基方式：拷贝，重命名，硬连接。
+python /data7/Auto_Bangumi/renamer.py '女武神驱动 美人鱼' 01 '-MERMAID- \[([\d]+)\].*' '/data7/data/新番/女武神驱动' /data7/Auto_Bangumi/links
 
-代理设置：
+# 运行效果
 
-元数据生成：
+作为cron跑两周的效果如下：
 
-# 主程序流-新增新番订阅
+tree -N /data7/Auto_Bangumi/links
 
-1. 新增订阅流
-
-新增订阅流：名称，订阅连接，代理方式，刷新时间。
-
-2. 刷新订阅流
-
-手动或者定时刷新。
-
-3. 新增新番匹配规则
-
-根据规则匹配确认能明确第几集。名称匹配可以本部分做，也可以不必。
-
-4. 新增新番订阅
-
-番名称（作为后续挂削的剧集名称），指定订阅流，指定匹配规则，刷新周期。
-
-5. 触发下载
-
-新番订阅cron刷新后，所有匹配均记录到订阅下载表，标记为未下载。
-
-对于未下载的，紧随其后加下载进入下载工具（目前认为为QB）。标记为下载中。
-
-如果下载失败，标记为失败并沿线路上报标记新番订阅失败。
-
-如果下载成功，则暂停上传，标记为完成下载。
-
-6. 刮削设置
-
-下载完成后，找到下载完成的文件，根据名称，季，集信息，重命名或者拷贝文件到目标文件夹。标记为完成处理。
-
-7. 元数据
-
-对于刮削完成的，后续考虑旁路下载组装番剧信息，而不依赖plex之类在线下载。
+/data7/Auto_Bangumi/links
+├── 徹夜之歌
+│   └── Season 01
+│       ├── 徹夜之歌 S01E01.mp4
+│       ├── 徹夜之歌 S01E02.mp4
+│       ├── 徹夜之歌 S01E03.mp4
+│       ├── 徹夜之歌 S01E04.mp4
+│       └── 徹夜之歌 S01E05.mp4
+├── 传颂之物 二人的白皇
+│   └── Season 01
+│       ├── 传颂之物 二人的白皇 S01E01.mkv
+│       ├── 传颂之物 二人的白皇 S01E02.mkv
+│       ├── 传颂之物 二人的白皇 S01E03.mkv
+│       ├── 传颂之物 二人的白皇 S01E04.mkv
+│       ├── 传颂之物 二人的白皇 S01E05.mkv
+│       ├── 传颂之物 二人的白皇 S01E06.mkv
+│       └── 传颂之物 二人的白皇 S01E07.mkv
+├── 金装的薇尔梅
+│   └── Season 01
+│       ├── 金装的薇尔梅 S01E01.mp4
+│       ├── 金装的薇尔梅 S01E02.mp4
+│       ├── 金装的薇尔梅 S01E03.mp4
+│       ├── 金装的薇尔梅 S01E04.mp4
+│       └── 金装的薇尔梅 S01E05.mp4
+├── 莉可丽丝
+│   └── Season 01
+│       ├── 莉可丽丝 S01E01.mp4
+│       ├── 莉可丽丝 S01E02.mp4
+│       ├── 莉可丽丝 S01E03.mp4
+│       ├── 莉可丽丝 S01E04.mp4
+│       ├── 莉可丽丝 S01E05.mp4
+│       └── 莉可丽丝 S01E06.mp4
+├── 契约之吻
+│   └── Season 01
+│       ├── 契约之吻 S01E01.mp4
+│       ├── 契约之吻 S01E02.mp4
+│       ├── 契约之吻 S01E03.mp4
+│       ├── 契约之吻 S01E04.mp4
+│       ├── 契约之吻 S01E05.mp4
+│       └── 契约之吻 S01E06.mp4
+├── 神渣☆偶像
+│   └── Season 01
+│       ├── 神渣☆偶像 S01E01.mp4
+│       ├── 神渣☆偶像 S01E02.mp4
+│       ├── 神渣☆偶像 S01E03.mp4
+│       ├── 神渣☆偶像 S01E04.mp4
+│       ├── 神渣☆偶像 S01E05.mp4
+│       └── 神渣☆偶像 S01E06.mp4
+├── 异世界归来的舅舅
+│   └── Season 01
+│       ├── 异世界归来的舅舅 S01E01.mp4
+│       ├── 异世界归来的舅舅 S01E02.mp4
+│       ├── 异世界归来的舅舅 S01E03.mp4
+│       └── 异世界归来的舅舅 S01E04.mp4
+├── 影宅
+│   └── Season 02
+│       ├── 影宅 S02E01.mkv
+│       ├── 影宅 S02E02.mkv
+│       ├── 影宅 S02E03.mkv
+│       ├── 影宅 S02E04.mkv
+│       └── 影宅 S02E05.mkv
 
